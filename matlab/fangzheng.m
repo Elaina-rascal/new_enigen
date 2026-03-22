@@ -4,7 +4,7 @@ clear; clc; close all;
 %% 1. 核心参数 (必须平铺，Simulink 才能直接读取)
 rho = 1.225; R = 20; ng = 43.165;
 Jr = 440650; Jg = 34.4; 
-J_total = Jr + (ng^2) * Jg;  % 修复 (u(1)-u(2))/J_total 报错
+J_total = Jr + (ng^2) * Jg  % 修复 (u(1)-u(2))/J_total 报错
 lambda_opt = 7.95; 
 Cp_max = 0.411;
 Ini_Omega = 1.59;            % 修复 Integrator 报错
