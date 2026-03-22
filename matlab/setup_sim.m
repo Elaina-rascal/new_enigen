@@ -38,7 +38,7 @@ else
 end
 
 %% 3. 打开并配置 Simulink 模型
-model_name = 'fangzheng_run';
+model_name = 'fangzheng_run_2024a';
 
 % 修正后的 exist 用法：检查是否存在该名称的文件
 if exist(model_name, 'file') || exist([model_name, '.slx'], 'file') || exist([model_name, '.mdl'], 'file')

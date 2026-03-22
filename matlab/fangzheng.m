@@ -21,7 +21,7 @@ catch
 end
 
 %% 3. 运行仿真
-model = 'fangzheng_run';
+model = 'fangzheng_run_2024a';
 if ~bdIsLoaded(model), load_system(model); end
 simOut = sim(model, 'StopTime', '600');
 
