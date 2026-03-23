@@ -1,6 +1,6 @@
 %% 600kW 风电系统自动化评价程序 (修复兼容版)
 clear; clc; close all;
-
+use_raw_flag=true;
 %% 1. 核心参数 (必须平铺，Simulink 才能直接读取)
 rho = 1.225; R = 20; ng = 43.165;
 Jr = 440650; Jg = 34.4; 
