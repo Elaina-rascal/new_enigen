@@ -1,2 +1,51 @@
 *.slxc
 slprj/
+*.bak
+*.~u
+_Boot/
+_Compileinfo/
+### TwinCAT3 ###
+# Website: https://www.beckhoff.com/twincat3/
+# TwinCAT PLC
+*.plcproj.bak
+*.plcproj.orig
+*.tpy
+*.tclrs
+*.library
+*.compiled-library
+*.compileinfo
+*.asm
+*.core
+LineIDs.dbg
+LineIDs.dbg.bak
+# TwinCAT C++ and shared types
+# Ignoring the TMC file is only useful for plain PLC programming
+# If shared data types (via TMC), C++, or TcCom-Modules are used, include the TMC file in the repository
+*.tmc
+*.tmcRefac
+# TwinCAT project files
+*.tsproj.bak
+*.tsproj.b?k
+*.tsproj.orig
+*.xti.bak
+*.xti.bk?
+*.xti.orig
+*.xtv
+*.xtv.bak
+*.xtv.bk?
+# Multiuser specific files and folders
+**/.TcGit/
+# Exclude not required folders
+**/_Boot/
+**/_CompileInfo/
+**/_Libraries/
+**/_ModuleInstall/
+**/_Deployment/
+**/_Repository/
+# Visual Studio Shell project-specific files and folders
+**/.vs/
+*.~u
+*.project.~u
+*.suo
+# To include specific library directories (e.g., third-party/custom libs), use:
+# !/**/_Libraries/<directory_name>/

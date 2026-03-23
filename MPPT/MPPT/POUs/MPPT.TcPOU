@@ -1,0 +1,102 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4022.12">
+  <POU Name="MPPT" Id="{31e6ca57-2877-4c60-b0c6-e458f100d60e}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_InstantCustom
+VAR_INPUT
+    Wg          : REAL;    (* 发电机转速 (rad/s) *)
+END_VAR
+
+VAR_OUTPUT
+    Te          : REAL;    (* 发电机电磁转矩 (N·m) *)
+    Ta_estout   : REAL;    (* 折算到风轮端的机械转矩观测值 (N·m) *)
+    debug       : REAL;    (* 调试：观测转矩与最优转矩之差 *)
+END_VAR
+
+VAR
+    (* 内部静态变量 (等同于 MATLAB 的 persistent) *)
+    prev_Wg     : REAL := 0.0;
+    prev_Te     : REAL := 0.0;
+    Ta_est      : REAL := 0.0;
+    init_done   : BOOL := FALSE; (* 初始化标志 *)
+
+    (* 常量与中间变量 *)
+    dt          : REAL := 0.05;   (* 采样时间 50ms *)
+    i_ratio     : REAL := 43.0;   (* 减速比 *)
+    K_opt       : REAL := 0.0626; (* 最优转矩系数 *)
+    J_LSS       : REAL := 504740.0; (* 风轮侧惯量 *)
+    J_HSS       : REAL;           (* 高速轴等效惯量 *)
+    L_obs       : REAL := 0.5;    (* 观测器增益/滤波系数 *)
+    W_gbgn      : REAL := 56.0;   (* 并网/切入转速 *)
+    
+    d_Wg        : REAL;
+    Ta_HSS_inst : REAL;
+    Te_ideal    : REAL;
+    delta_Wg    : REAL;
+    Te_raw      : REAL;
+    K_acc_gain  : REAL := 1.0;
+    fall_rate   : REAL := 0.95;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[(* --- 1. 参数初始化计算 --- *)
+J_HSS := J_LSS / (EXPT(i_ratio, 2));
+
+(* 首次运行初始化 *)
+IF NOT init_done THEN
+    prev_Wg := Wg;
+    prev_Te := 0.0;
+    Ta_est  := K_opt * EXPT(Wg, 2);
+    init_done := TRUE;
+END_IF;
+
+(* --- 2. 机械转矩 (Ta) 观测器 (发电机轴侧) --- *)
+(* 计算转速变化率 *)
+d_Wg := (Wg - prev_Wg) / dt;
+
+(* 瞬时高速轴机械转矩计算: Ta = J*dw/dt + Te *)
+Ta_HSS_inst := J_HSS * d_Wg + prev_Te;
+
+(* 观测器一阶滤波更新 *)
+Ta_est := (1.0 - L_obs) * Ta_est + L_obs * Ta_HSS_inst;
+
+(* --- 3. 计算最优转矩与补偿策略 --- *)
+Te_ideal := K_opt * EXPT(Wg, 2);
+delta_Wg := Wg - prev_Wg;
+
+IF Wg < W_gbgn THEN
+    Te_raw := 0.0;
+ELSE
+    IF delta_Wg > 0.0 THEN
+        (* 【加速上升阶段】 引入转矩补偿 *)
+        Te_raw := Te_ideal - K_acc_gain * (Ta_est - Te_ideal);
+    ELSE
+        (* 【减速下降阶段】 平滑减载 *)
+        Te_raw := prev_Te * fall_rate + Te_ideal * (1.0 - fall_rate);
+    END_IF;
+END_IF;
+
+(* --- 4. 限幅与状态更新 --- *)
+(* 限幅在 [0, 12000] N·m *)
+IF Te_raw < 0.0 THEN
+    Te := 0.0;
+ELSIF Te_raw > 12000.0 THEN
+    Te := 12000.0;
+ELSE
+    Te := Te_raw;
+END_IF;
+
+(* 输出转换：折算回低速轴(风轮端)转矩 *)
+Ta_estout := Ta_est * i_ratio;
+
+(* 更新历史值供下一周期使用 *)
+prev_Wg := Wg;
+prev_Te := Te;
+
+(* 调试输出 *)
+debug := Ta_est - Te_ideal;]]></ST>
+    </Implementation>
+    <LineIds Name="MPPT">
+      <LineId Id="87" Count="54" />
+      <LineId Id="9" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

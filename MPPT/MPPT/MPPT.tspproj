@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<TcSmProject xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://www.beckhoff.com/schemas/2012/07/TcSmProject" TcSmVersion="1.0" TcVersion="3.1.4022.22">
+	<Project ProjectGUID="{5A06B5AE-2FBC-4364-892C-2CD82D7F0A50}" Target64Bit="true" ShowHideConfigurations="#x306">
+		<Plc>
+			<Project GUID="{71E6D523-C823-4F63-B6D3-B610D939D52B}" Name="MPPT" PrjFilePath="MPPT.plcproj" TmcFilePath="MPPT.tmc" ReloadTmc="true" AmsPort="851" FileArchiveSettings="#x000e"/>
+		</Plc>
+	</Project>
+</TcSmProject>
