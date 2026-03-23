@@ -2,3 +2,5 @@
 slprj/
 *.bak
 *.~u
+_Boot/
+_Compileinfo/
