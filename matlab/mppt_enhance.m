@@ -7,7 +7,7 @@ function [Te,debug1,debug2] = mppt_enhance(Wg)
     K_opt = 0.0626;   % 标准最优转矩系数
     
     % --- 2. 空间预留参数 (关键调优区) ---
-    W_high_limit = 120;   % 加速空间作用上限 (rad/s)
+    W_high_limit = 100;   % 加速空间作用上限 (rad/s)
     % 减载深度系数 (0~1)，值越大，低速时转矩减得越多，加速空间越大
     K_space = 0.4;       
     
