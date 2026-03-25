@@ -1,73 +1,42 @@
-function [Te, Ta, debug] = mppt_enhance(Wg)
-    persistent prev_Wg Te_smooth acc_filt is_initialized
+function [Te,debug1,debug2] = mppt_enhance(Wg)
+    % 改进版：基于转速区间的“加速空间预留”法
+    % 思路：在低转速段主动降低转矩，预留加速度空间，利用二次函数实现低速段“减载”更多
     
-    % --- 1. 参数定义 ---
-    dt = 0.05; 
-    i_ratio = 43; 
-    K_opt = 0.0626;    
-    J_HSS = 504740 / (i_ratio^2); 
+    % --- 1. 核心参数 ---
+    W_gbgn = 53;      % 切入转速
+    K_opt = 0.0626;   % 标准最优转矩系数
     
-    % 新增：最小工作转速 (例如设定为 60 rad/s，根据实际机组切入转速调整)
-    % 低于此转速时，发电机卸载，允许风轮空转加速
-    Wg_min = 56; 
+    % --- 2. 空间预留参数 (关键调优区) ---
+    W_high_limit = 120;   % 加速空间作用上限 (rad/s)
+    % 减载深度系数 (0~1)，值越大，低速时转矩减得越多，加速空间越大
+    K_space = 0.4;       
     
-    if isempty(is_initialized)
-        prev_Wg = Wg;
-        Te_smooth = K_opt * (Wg^2);
-        acc_filt = 0;
-        is_initialized = true;
-    end
+    % --- 3. 基础转矩计算 ---
+    Te_base = K_opt * (Wg^2);
     
-    % --- 2. 信号处理 ---
-    d_Wg_raw = (Wg - prev_Wg) / dt;
-    alpha_acc = 0.15; 
-    acc_filt = (1 - alpha_acc) * acc_filt + alpha_acc * d_Wg_raw;
-    
-    % --- 3. 基础理想转矩与最小风速逻辑 ---
-    if Wg < Wg_min
-        % 情况 C: 转速低于切入阈值
-        % 这种情况下，我们要让转矩尽快归零，给风轮加速空间
-        Te_ideal = 0;
-        K_acc_local = 0; % 在启动阶段关闭补偿，避免加速度噪声干扰
-        K_acc_dec=0.0;
-    else
-        % 情况 D: 正常 MPPT 区
-        Te_ideal = K_opt * (Wg^2);
-        K_acc_local = 0.4; 
-        K_acc_dec=0.0;
-    end
-    
-    % --- 4. 动态补偿逻辑 ---
-    compensation = 0;
-    
-    % 仅在正常工作区进行动态补偿
-    if Wg >= Wg_min
-        if acc_filt < 0
-            % 转速下降 -> 减少转矩 (正反馈救速)
-            compensation = K_acc_dec * J_HSS * acc_filt; 
-        elseif acc_filt > 0
-            % 转速上升 -> 增加转矩 (T_acc 提取)
-            compensation = K_acc_local * J_HSS * acc_filt; 
-        end
+    % --- 4. 预留空间逻辑 (不依赖加速度) ---
+    if Wg < W_gbgn
+        Te_raw = 0;
+    elseif Wg < W_high_limit
+        % 定义归一化的转速位置 (0 at W_gbgn, 1 at W_high_limit)
+        % x 越小（转速越低），加速空间需求越大
+        x = (W_high_limit - Wg) / (W_high_limit - W_gbgn);
         
-        % 安全限幅 (30% 限制)
-        max_comp = 0.5 * Te_ideal; 
-        compensation = max(-max_comp, min(compensation, max_comp));
+        % 使用二次函数构造减载比例：Ratio = K_space * x^2
+        % 这样在转速较小时(x靠近1)，减载量很大；随着转速升高，减载量迅速平滑消失
+        reduction_ratio = K_space * (x^2);
+        
+        % 最终转矩 = 基础转矩 * (1 - 减载比例)
+        Te_raw = Te_base * (1 - reduction_ratio);
+    else
+        % 超过上限后，完全恢复到标准 OTC 曲线
+        Te_raw = Te_base;
     end
     
-    % 计算原始目标值
-    Te_raw = Te_ideal + compensation; 
+    % --- 5. 安全限幅 ---
+    Te = max(0, min(Te_raw, 12000));
     
-    % --- 5. 平滑处理与输出 ---
-    % 当处于切入转速边缘时，平滑系数可以略微调大，保证切入平稳
-    alpha_te = 0.4; 
-    Te_smooth = (1 - alpha_te) * Te_smooth + alpha_te * Te_raw;
-    
-    Ta = 0;
-    % 额定转矩限幅
-    Te = max(0, min(Te_smooth, 12000));
-    
-    % --- 6. 状态更新与 Debug ---
-    prev_Wg = Wg;
-    debug = compensation; 
+    % --- 6. 调试输出 ---
+    debug1 = Te_base;             % 原始 OTC 指令
+    debug2 = Te_base - Te_raw;    % 预留出来的转矩空间 (N·m)
 end
