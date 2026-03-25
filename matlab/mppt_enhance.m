@@ -1,59 +1,73 @@
-function [Te, Ta_estout,debug] = mppt_enhance(Wg)
-    % 修正版：考虑齿轮箱变比的 Ta 观测器
-    % Wg: 发电机转速 (rad/s)
-    % Te: 发电机电磁转矩 (N·m)
-    
-    persistent prev_Wg prev_Te Ta_est
-    dt = 0.05; 
-    i_ratio = 43; % 减速比
+function [Te, Ta, debug] = mppt_enhance(Wg)
+    persistent prev_Wg Te_smooth acc_filt is_initialized
     
     % --- 1. 参数定义 ---
-    K_opt = 0.0626;    
-    % 重要：如果 504740 是风轮侧惯量，折算到发电机侧需除以 i^2
-    J_LSS = 504740; 
-    J_HSS = J_LSS / (i_ratio^2); % 折算后的等效惯量
+    dt = 0.05; 
+    i_ratio = 43; 
+    K_opt = 0.026;    
+    J_HSS = 504740 / (i_ratio^2); 
     
-    L_obs = 0.5;       
-    W_gbgn = 56;       
+    % 新增：最小工作转速 (例如设定为 60 rad/s，根据实际机组切入转速调整)
+    % 低于此转速时，发电机卸载，允许风轮空转加速
+    Wg_min = 60; 
     
-    if isempty(prev_Wg)
+    if isempty(is_initialized)
         prev_Wg = Wg;
-        prev_Te = 0;
-        Ta_est = K_opt * (Wg^2); 
+        Te_smooth = K_opt * (Wg^2);
+        acc_filt = 0;
+        is_initialized = true;
     end
     
-    % --- 2. 机械转矩 (Ta) 观测器 (在发电机轴侧进行计算) ---
-    % 此时观测到的是“折算到高速轴的机械转矩”
-    d_Wg = (Wg - prev_Wg) / dt;
-    Ta_HSS_instant = J_HSS * d_Wg + prev_Te; 
-    Ta_est = (1 - L_obs) * Ta_est + L_obs * Ta_HSS_instant;
+    % --- 2. 信号处理 ---
+    d_Wg_raw = (Wg - prev_Wg) / dt;
+    alpha_acc = 0.15; 
+    acc_filt = (1 - alpha_acc) * acc_filt + alpha_acc * d_Wg_raw;
     
-    % --- 3. 计算最优转矩与补偿 ---
-    Te_ideal = K_opt * (Wg^2);
-    delta_Wg = Wg - prev_Wg;
-    
-    if Wg < W_gbgn
-        Te_raw = 0;
+    % --- 3. 基础理想转矩与最小风速逻辑 ---
+    if Wg < Wg_min
+        % 情况 C: 转速低于切入阈值
+        % 这种情况下，我们要让转矩尽快归零，给风轮加速空间
+        Te_ideal = 0;
+        K_acc_local = 0; % 在启动阶段关闭补偿，避免加速度噪声干扰
+        K_acc_dec=0.0;
     else
-        if delta_Wg > 0
-            % 【上升阶段】
-            K_acc_gain = 1.0; % 既然有了准确的观测，可以适当调大补偿
-            % 如果 Ta_est > Te_ideal，说明风能输入大于当前发电机吸收，支持加速
-            Te_raw = Te_ideal - K_acc_gain * (Ta_est - Te_ideal);
-        else
-            % 【下降阶段】
-            fall_rate = 0.95; 
-            Te_raw = prev_Te * fall_rate + Te_ideal * (1 - fall_rate);
-        end
+        % 情况 D: 正常 MPPT 区
+        Te_ideal = K_opt * (Wg^2);
+        K_acc_local = 0.4; 
+        K_acc_dec=0.0;
     end
     
-    % --- 4. 限幅与更新 ---
-    Te = max(0, min(Te_raw, 12000));
+    % --- 4. 动态补偿逻辑 ---
+    compensation = 0;
     
-    % 如果你想输出风轮端的实际转矩 Ta，则需要乘以 i_ratio
-    Ta_estout = Ta_est * i_ratio; 
+    % 仅在正常工作区进行动态补偿
+    if Wg >= Wg_min
+        if acc_filt < 0
+            % 转速下降 -> 减少转矩 (正反馈救速)
+            compensation = K_acc_dec * J_HSS * acc_filt; 
+        elseif acc_filt > 0
+            % 转速上升 -> 增加转矩 (T_acc 提取)
+            compensation = K_acc_local * J_HSS * acc_filt; 
+        end
+        
+        % 安全限幅 (30% 限制)
+        max_comp = 0.5 * Te_ideal; 
+        compensation = max(-max_comp, min(compensation, max_comp));
+    end
     
+    % 计算原始目标值
+    Te_raw = Te_ideal + compensation; 
+    
+    % --- 5. 平滑处理与输出 ---
+    % 当处于切入转速边缘时，平滑系数可以略微调大，保证切入平稳
+    alpha_te = 0.4; 
+    Te_smooth = (1 - alpha_te) * Te_smooth + alpha_te * Te_raw;
+    
+    Ta = 0;
+    % 额定转矩限幅
+    Te = max(0, min(Te_smooth, 12000));
+    
+    % --- 6. 状态更新与 Debug ---
     prev_Wg = Wg;
-    prev_Te = Te;
-    debug=Ta_est-Te_ideal;
+    debug = compensation; 
 end
