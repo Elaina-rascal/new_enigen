@@ -12,7 +12,7 @@ K = 0.0626;
 
 %% 2. 风速数据处理 (修复 From Workspace 报错)
 try
-    load('windspeed2.mat'); 
+    load('windspeed3.mat'); 
     % 模型在找变量名 'windspeed'，必须精确匹配
     windspeed = [(0:0.05:600)', windspeedlist(:,1)]; 
     disp('数据加载成功。');

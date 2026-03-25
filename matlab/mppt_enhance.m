@@ -4,12 +4,12 @@ function [Te, Ta, debug] = mppt_enhance(Wg)
     % --- 1. 参数定义 ---
     dt = 0.05; 
     i_ratio = 43; 
-    K_opt = 0.026;    
+    K_opt = 0.0626;    
     J_HSS = 504740 / (i_ratio^2); 
     
     % 新增：最小工作转速 (例如设定为 60 rad/s，根据实际机组切入转速调整)
     % 低于此转速时，发电机卸载，允许风轮空转加速
-    Wg_min = 60; 
+    Wg_min = 56; 
     
     if isempty(is_initialized)
         prev_Wg = Wg;
