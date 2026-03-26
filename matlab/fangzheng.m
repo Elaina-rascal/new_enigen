@@ -11,14 +11,17 @@ Ini_Omega = 1.59;            % 修复 Integrator 报错
 K = 0.0626;
 
 %% 2. 风速数据处理 (修复 From Workspace 报错)
-try
-    load('windspeed3.mat'); 
-    % 模型在找变量名 'windspeed'，必须精确匹配
-    windspeed = [(0:0.05:600)', windspeedlist(:,1)]; 
-    disp('数据加载成功。');
-catch
-    error('未找到 windspeed2.mat，请确认文件在当前文件夹。');
-end
+load('windspeed4.mat'); 
+% 模型在找变量名 'windspeed'，必须精确匹配
+T_end = 600;
+dt = 0.05;
+t = (0:dt:T_end)';
+
+% 确保 windspeedlist 只取前 12001 行
+% 或者如果它不够长，你需要调整 T_end
+windspeed = [t, windspeedlist(1:length(t), 1)];
+disp('数据加载成功。');
+
 
 %% 3. 运行双方案仿真（raw 与改进）
 model = 'fangzheng_run_2024a';
