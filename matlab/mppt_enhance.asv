@@ -1,0 +1,41 @@
+function [Te, = mppt_enhance(Wg)
+    % 600kW 风机改进型最优转矩法
+    % 思路：引入转速超前补偿 (Speed-Lead)，在不破坏稳态 K*W^2 的前提下提高动态响应
+    
+    persistent prev_Wg dWg_filt is_init
+    
+    % --- 1. 核心参数 (保持与原版一致) ---
+    W_gbgn = 53;      
+    K_opt = 0.0626;   
+    dt = 0.05;        % 假设采样周期，需根据实际系统匹配
+    tau = 0.6;        % 超前时间常数 (秒)，建议取值 0.3-0.8
+    alpha = 0.15;     % 微分项低通滤波系数，用于滤除噪声
+    
+    if isempty(is_init)
+        prev_Wg = Wg;
+        dWg_filt = 0;
+        is_init = true;
+    end
+    
+    % --- 2. 动态趋势识别 ---
+    % 计算转速变化率并进行平滑处理，防止转矩指令产生高频震荡
+    dWg_raw = (Wg - prev_Wg) / dt;
+    dWg_filt = (1 - alpha) * dWg_filt + alpha * dWg_raw;
+    
+    % --- 3. 计算“超前转速” ---
+    % 当 Wg 增加时，W_lead 会比 Wg 更大，从而提前拉高转矩捕获能量
+    W_lead = Wg + tau * dWg_filt;
+    
+    % --- 4. 分段控制逻辑 ---
+    if Wg < W_gbgn
+        Te = 0; 
+    else
+        % 使用超前转速计算转矩
+        % 这种写法在稳态时 (dWg=0) 会完美退化回原版的 K_opt * Wg^2
+        Te = K_opt * (W_lead^2); 
+    end
+    
+    % --- 5. 安全限幅与状态更新 ---
+    Te = max(0, min(Te, 12000));
+    prev_Wg = Wg;
+end
