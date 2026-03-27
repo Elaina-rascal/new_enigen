@@ -1,42 +1,79 @@
-function [Te,debug1,debug2] = mppt_enhance(Wg)
-    % 改进版：基于转速区间的“加速空间预留”法
-    % 思路：在低转速段主动降低转矩，预留加速度空间，利用二次函数实现低速段“减载”更多
+function [Te, debug1, debug2] = mppt_enhance_pi(Wg)
+    % 核心逻辑：
+    % 1. 加速段 (dw > 0)：累积积分项，用于计算减载量 T_pi。
+    % 2. 减速段 (dw < 0)：不累积积分，并启动 2s 定时器。
+    % 3. 保护机制：若 2s 内累计加速度为负，清零积分，恢复标准 OTC。
+
+    % --- 1. 状态存储 ---
+    persistent error_integral Wg_old decel_timer sum_dw;
+    if isempty(error_integral)
+        error_integral = 0;
+        Wg_old = Wg;
+        decel_timer = 0; % 减速计时器 (秒)
+        sum_dw = 0;      % 2s窗口内的加速度累加值
+    end
+
+    % --- 2. 核心参数 ---
+    W_gbgn = 55;      
+    K_opt = 0.0526;   
+    dt = 0.01;           % 仿真步长
+    T_window = 2.0;      % 减速判定窗口时长
     
-    % --- 1. 核心参数 ---
-    W_gbgn = 53;      % 切入转速
-    K_opt = 0.0626;   % 标准最优转矩系数
-    
-    % --- 2. 空间预留参数 (关键调优区) ---
-    W_high_limit = 100;   % 加速空间作用上限 (rad/s)
-    % 减载深度系数 (0~1)，值越大，低速时转矩减得越多，加速空间越大
-    K_space = 0.4;       
-    
-    % --- 3. 基础转矩计算 ---
+    Kp = 0;              
+    Ki = 3.2;            
+
+    % --- 3. 计算加速度 dw ---
+    dw = (Wg - Wg_old) / dt;
+    Wg_old = Wg;
+
+    % --- 4. 基础转矩 ---
     Te_base = K_opt * (Wg^2);
-    
-    % --- 4. 预留空间逻辑 (不依赖加速度) ---
+
+    % --- 5. 逻辑判断与积分器控制 ---
     if Wg < W_gbgn
         Te_raw = 0;
-    elseif Wg < W_high_limit
-        % 定义归一化的转速位置 (0 at W_gbgn, 1 at W_high_limit)
-        % x 越小（转速越低），加速空间需求越大
-        x = (W_high_limit - Wg) / (W_high_limit - W_gbgn);
-        
-        % 使用二次函数构造减载比例：Ratio = K_space * x^2
-        % 这样在转速较小时(x靠近1)，减载量很大；随着转速升高，减载量迅速平滑消失
-        reduction_ratio = K_space * (x^2);
-        
-        % 最终转矩 = 基础转矩 * (1 - 减载比例)
-        Te_raw = Te_base * (1 - reduction_ratio);
+        error_integral = 0;
+        decel_timer = 0;
+        sum_dw = 0;
     else
-        % 超过上限后，完全恢复到标准 OTC 曲线
-        Te_raw = Te_base;
+        % --- A. 积分累加逻辑 ---
+        if dw > 0
+            % 仅在加速时累积积分（误差为 dw）
+            error_integral = error_integral + dw * dt;
+        end
+
+        % --- B. 减速判定逻辑 (2s 定时器) ---
+        if dw < 0
+            decel_timer = decel_timer + dt;
+            sum_dw = sum_dw + dw; % 记录减速的“剧烈程度”
+        else
+            % 如果当前在加速，可以考虑缓慢重置定时器或直接清零
+            decel_timer = 0;
+            sum_dw = 0;
+        end
+
+        % 如果持续减速达到 2 秒，且总趋势确实是下降的
+        if decel_timer >= T_window
+            if sum_dw < 0
+                error_integral = 0; % 【关键】清零积分，恢复基础转矩
+            end
+            decel_timer = 0; % 重置窗口
+            sum_dw = 0;
+        end
+
+        % --- C. 计算补偿转矩 ---
+        error_integral = max(0, min(error_integral, 500)); % 确保补偿不为负
+        
+        % 根据你之前的公式：Ki * error_integral^2
+        T_pi = Kp * dw + Ki * (error_integral);
+        
+        Te_raw = Te_base - T_pi;
     end
-    
-    % --- 5. 安全限幅 ---
+
+    % --- 6. 安全限幅 ---
     Te = max(0, min(Te_raw, 12000));
-    
-    % --- 6. 调试输出 ---
-    debug1 = Te_base;             % 原始 OTC 指令
-    debug2 = Te_base - Te_raw;    % 预留出来的转矩空间 (N·m)
+
+    % --- 7. 调试输出 ---
+    debug1 = dw;             
+    debug2 = error_integral; % 观察积分项在 2s 后的复位情况
 end
