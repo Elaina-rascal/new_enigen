@@ -5,7 +5,7 @@ function Te = mppt_raw(Wg)
     
     % 1. 定义核心参数
     W_gbgn = 53;  % 发电机界限转速 (对应切入风速)
-    K_opt = 0.0626;  % 最优转矩系数
+    K_opt = 0.0426;  % 最优转矩系数
     
     % 2. 分段控制逻辑 (防气动死锁)
     if Wg < W_gbgn
@@ -13,6 +13,6 @@ function Te = mppt_raw(Wg)
         Te = 0; 
     else
         % 追踪阶段：转速达标后，严格按照最优转矩曲线施加力矩发电
-        Te = K_opt * (Wg^2); 
+        Te = K_opt * (Wg^2)-80; 
     end
 end

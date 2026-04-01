@@ -3,7 +3,7 @@ clear; clc; close all;
 use_raw_flag=true;
 %% 1. 核心参数 (必须平铺，Simulink 才能直接读取)
 rho = 1.225; R = 20; ng = 43.165;
-Jr = 440650; Jg = 34.4; 
+Jr = 400650; Jg = 34.4; 
 J_total = Jr + (ng^2) * Jg  % 修复 (u(1)-u(2))/J_total 报错
 lambda_opt = 7.95; 
 Cp_max = 0.411;
@@ -11,7 +11,7 @@ Ini_Omega = 1.59;            % 修复 Integrator 报错
 K = 0.0626;
 
 %% 2. 风速数据处理 (修复 From Workspace 报错)
-load('windspeed4.mat'); 
+load('windspeed10.mat'); 
 % 模型在找变量名 'windspeed'，必须精确匹配
 T_end = 600;
 dt = 0.05;
@@ -19,7 +19,7 @@ t = (0:dt:T_end)';
 
 % 确保 windspeedlist 只取前 12001 行
 % 或者如果它不够长，你需要调整 T_end
-windspeed = [t, windspeedlist(1:length(t), 1)];
+windspeed = [t, windspeed10(1:length(t), 1)];
 disp('数据加载成功。');
 
 
