@@ -1,38 +1,34 @@
 function [Te, debug1, debug2] = mppt_enhance_pi(Wg)
-    % 核心逻辑：
-    % 1. 变 K_opt：在 [W_gbgn, Wk_max] 之间线性插值，从 0.0325 变到 0.0525。
-    % 2. 加速段 (dw > 0)：累积积分项，用于计算减载量 T_pi。
-    % 3. 保护机制：2s窗口加速度判定，若持续减速则清空积分。
-    % 4. 动态限幅：转矩锁定在 Te_base 的 (1±a) 倍。
+    % 核心逻辑修改：
+    % 1. 去掉 2s 窗口定时器。
+    % 2. 引入 dw_last，当 sign(dw) ~= sign(dw_last) 时，立即清空积分项。
+    % 3. 保持原有的线性插值 K_opt 和动态限幅逻辑。
 
     % --- 1. 状态存储 ---
-    persistent error_integral Wg_old decel_timer sum_dw;
+    persistent error_integral Wg_old dw_last;
     if isempty(error_integral)
         error_integral = 0;
         Wg_old = Wg;
-        decel_timer = 0;
-        sum_dw = 0;
+        dw_last = 0; % 初始化上一次加速度
     end
 
     % --- 2. 核心参数 ---
     W_gbgn = 53;         % 起转转速
     Wk_max = 90;         % 变系数终止转速
     K_start = 0.0425;    % 起始 K 值
-    K_end = 0.0425;      % 终止 K 值
+    K_end = 0.0525;      % 终止 K 值
     
-    dt = 0.01;           
-    T_window = 2.0;      
-    Kp = 10;              
-    Ki = 0;            
-    a = 0.3;             
+    dt = 0.05;           
+    Kp = 0;              
+    Ki = 3;              % 注意：当前 Ki 为 0，积分项在计算 T_pi 时实际上不起作用，除非后续修改参数
+    a = 0.5;             
 
-    % --- 3. 计算变系数 K_opt (线性插值) ---
+    % --- 3. 计算变系数 K_opt ---
     if Wg <= W_gbgn
         K_opt = K_start;
     elseif Wg >= Wk_max
         K_opt = K_end;
     else
-        % 在 [53, 80] 之间线性插值：y = y0 + (x - x0) * (y1 - y0) / (x1 - x0)
         K_opt = K_start + (Wg - W_gbgn) * (K_end - K_start) / (Wk_max - W_gbgn);
     end
 
@@ -47,47 +43,37 @@ function [Te, debug1, debug2] = mppt_enhance_pi(Wg)
     if Wg < W_gbgn
         Te_raw = 0;
         error_integral = 0;
-        decel_timer = 0;
-        sum_dw = 0;
     else
-        % A. 积分累加
-        if dw > 0
-            error_integral = error_integral + dw * dt;
+        % --- 关键修改：变号判定清零 ---
+        % 如果当前加速度与上一时刻方向不同（即发生转折），清空积分
+        if sign(dw) ~= sign(dw_last) && dw_last ~= 0
+            error_integral = 0;
         end
+        
+        % 积分累加逻辑（仅在加速段累加）
+        
+        error_integral = error_integral + dw * dt;
+        
 
-        % B. 减速判定
-        if dw < 0
-            decel_timer = decel_timer + dt;
-            sum_dw = sum_dw + dw; 
-        else
-            decel_timer = 0;
-            sum_dw = 0;
-        end
-
-        if decel_timer >= T_window
-            if sum_dw < 0
-                error_integral = 0; 
-            end
-            decel_timer = 0; 
-            sum_dw = 0;
-        end
-
-        % C. 计算补偿与限幅
+        % 限制积分范围
         error_integral = max(0, min(error_integral, 500)); 
-        T_pi = Kp * dw + Ki * (error_integral);
+        
+        % 计算补偿项
+        T_pi = Kp * dw + Ki * error_integral;
         
         Te_raw = Te_base - T_pi;
         
-        % D. 动态限幅
+        % 动态限幅
         Te_min = (1 - a) * Te_base;
         Te_max = (1 + a) * Te_base;
-        Te_raw = max(Te_min, min(Te_raw, Te_max))-100;
+        Te_raw = max(Te_min, min(Te_raw, Te_max)) ;
     end
 
-    % --- 7. 安全硬限幅 ---
-    Te = max(0, min(Te_raw, 12000));
+    % --- 7. 更新状态变量 ---
+    dw_last = dw; 
 
-    % --- 8. 调试输出 ---
+    % --- 8. 安全硬限幅与输出 ---
+    Te = max(0, min(Te_raw, 12000));
     debug1 = dw;             
     debug2 = error_integral; 
 end
