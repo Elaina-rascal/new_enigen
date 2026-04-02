@@ -14,14 +14,14 @@ function [Te, debug1, debug2] = mppt_enhance_pi(Wg)
 
     % --- 2. 核心参数 ---
     W_gbgn = 56;         % 起转转速
-    Wk_max = 90;         % 变系数终止转速
-    K_start = 0.0225;    % 起始 K 值
-    K_end = 0.0525;      % 终止 K 值
+    Wk_max = 85;         % 变系数终止转速
+    K_start = 0.0325;    % 起始 K 值
+    K_end = 0.0625;      % 终止 K 值
     
     dt = 0.05;           
     Kp = 0;              
-    Ki = 5;              % 注意：当前 Ki 为 0，积分项在计算 T_pi 时实际上不起作用，除非后续修改参数
-    a = 0.8;             
+    Ki = 10;              % 注意：当前 Ki 为 0，积分项在计算 T_pi 时实际上不起作用，除非后续修改参数
+    a = 0.5;             
 
     % --- 3. 计算变系数 K_opt ---
     if Wg <= W_gbgn
