@@ -13,6 +13,6 @@ function Te = mppt_raw(Wg)
         Te = 0; 
     else
         % 追踪阶段：转速达标后，严格按照最优转矩曲线施加力矩发电
-        Te = K_opt * (Wg^2)-80; 
+        Te = K_opt * (Wg^2); 
     end
 end
