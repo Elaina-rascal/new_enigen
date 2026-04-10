@@ -97,5 +97,5 @@ fprintf('转矩标准差之比(改进/raw): %.4f\n', std_ratio);
 % 快速绘图（保持原可视化风格）
 figure('Color', 'w', 'Name', 'MPPT 性能分析');
 subplot(3,1,1); plot(t, v_sim, 'c'); title('风速 (m/s)'); grid on;
-subplot(3,1,2); plot(t, Wg_opt, 'r--', t, Wg_enh, 'b'); title('转速跟踪'); legend('目标','实际(改进)'); grid on;
+subplot(3,1,2); plot(t, Wg_opt, 'r-', t, Wg_raw, 'k--', t, Wg_enh, 'b-'); title('转速跟踪'); legend('目标','改进前(虚线)','改进后(实线)'); grid on;
 subplot(3,1,3); plot(t, Te_raw, 'k', t, Te_enh, 'm'); title('电磁转矩对比 (N·m)'); legend('原始','改进'); xlabel('时间 (s)'); grid on;
